@@ -1,11 +1,11 @@
 {
-    "name": "kanban",
-    "short_name": "kanban",
+    "name": "余白の本棚 | 読書記録",
+    "short_name": "余白の本棚",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FAF9F5",
+    "theme_color": "#31594B",
+    "description": "読みたい・読んでいる・読了で管理する、自分だけの読書記録。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
