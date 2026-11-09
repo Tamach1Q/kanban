@@ -1,47 +1,106 @@
-import 'package:flutter/foundation.dart';
 import 'dart:convert';
-import 'model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'model.dart';
 
-class KanbanViewModel extends ChangeNotifier {
-  final prefs = SharedPreferencesAsync();
-  final tasks = <Task>[];
+class ReadingViewModel extends ChangeNotifier {
+  ReadingViewModel({SharedPreferencesAsync? preferences})
+    : _preferences = preferences ?? SharedPreferencesAsync();
+
+  final SharedPreferencesAsync _preferences;
+  final books = <Book>[];
+  String? errorMessage;
+  Future<void> _pendingSave = Future.value();
+  bool _canSave = true;
 
   Future<void> load() async {
-    final data = await prefs.getString('kanban');
-    if (data == null) return;
-    tasks.clear();
-    for (final t in jsonDecode(data)) {
-      tasks.add(Task(t['title'], t['status']));
+    try {
+      // 以前のKanbanの記録も、新しい読書記録として引き継ぐ。
+      final data =
+          await _preferences.getString('reading_books') ??
+          await _preferences.getString('kanban');
+      if (data == null) return;
+      final loaded = (jsonDecode(data) as List<dynamic>)
+          .map((item) => Book.fromJson(item as Map<String, dynamic>))
+          .toList();
+      books
+        ..clear()
+        ..addAll(loaded);
+    } catch (_) {
+      _canSave = false;
+      errorMessage = '記録を読み込めませんでした。ページを開き直してください。';
     }
-  }
-
-  Future<void> save() async {
     notifyListeners();
-    final data = [
-      for (final t in tasks) {'title': t.title, 'status': t.status}
-    ];
-    await prefs.setString('kanban', jsonEncode(data));
   }
 
-  void add(String text) {
-    tasks.add(Task(text));
-    save();
+  Future<void> _save() {
+    notifyListeners();
+    if (!_canSave) return Future.value();
+    final data = jsonEncode(books.map((book) => book.toJson()).toList());
+    // 操作した順に保存し、最後の状態が確実に残るようにする。
+    _pendingSave = _pendingSave.then((_) async {
+      try {
+        await _preferences.setString('reading_books', data);
+        errorMessage = null;
+      } catch (_) {
+        errorMessage = '保存できませんでした。ブラウザの保存設定を確認してください。';
+      }
+      notifyListeners();
+    });
+    return _pendingSave;
   }
 
-  void move(Task t, int status) {
-    t.status = status;
-    save();
+  Future<void> add(Book book) {
+    if (book.title.trim().isEmpty) return Future.value();
+    book.title = book.title.trim();
+    books.add(book);
+    return _save();
   }
 
-  void rename(Task t, String text) {
-    t.title = text;
-    save();
+  Future<void> update(Book book, Book edited) {
+    if (edited.title.trim().isEmpty) return Future.value();
+    book
+      ..title = edited.title.trim()
+      ..author = edited.author
+      ..note = edited.note
+      ..status = edited.status
+      ..rating = edited.rating;
+    return _save();
   }
 
-  void remove(Task t) {
-    tasks.remove(t);
-    save();
+  Future<void> move(Book book, ReadingStatus status) {
+    book.status = status;
+    return _save();
   }
 
+  Future<void> remove(Book book) {
+    books.remove(book);
+    return _save();
+  }
+
+  Future<void> addExamples() {
+    if (books.isNotEmpty) return Future.value();
+    books.addAll([
+      Book(
+        title: 'リーダブルコード',
+        author: 'Dustin Boswell / Trevor Foucher',
+        note: '気になっていた技術書。読みやすいコードの書き方を学びたい。',
+      ),
+      Book(
+        title: '銀河鉄道の夜',
+        author: '宮沢賢治',
+        status: ReadingStatus.reading,
+        note: '寝る前に少しずつ。言葉の響きも楽しみながら。',
+      ),
+      Book(
+        title: 'こころ',
+        author: '夏目漱石',
+        status: ReadingStatus.finished,
+        rating: 4,
+        note: '読み終わったあとも、しばらく余韻が残る一冊。',
+      ),
+    ]);
+    return _save();
+  }
 }
+[]
